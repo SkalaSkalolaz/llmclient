@@ -14,10 +14,14 @@ import (
 )
 
 const (
-	defaultTimeout         = 120 * time.Second
-	defaultOllamaURL       = "http://localhost:11434/v1/chat/completions"
-	defaultPollinationsURL = "https://gen.pollinations.ai/v1/chat/completions"
-	defaultOpenRouterURL   = "https://openrouter.ai/api/v1/chat/completions"
+	defaultTimeout       = 120 * time.Second
+	defaultOllamaURL     = "http://localhost:11434/v1/chat/completions"
+	defaultOpenRouterURL = "https://openrouter.ai/api/v1/chat/completions"
+	// Pollinations endpoints:
+	// - pollinationsFreeURL: используется без API-ключа (бесплатный доступ)
+	// - pollinationsPaidURL: используется с API-ключом (платный доступ)
+	pollinationsFreeURL = "https://text.pollinations.ai/openai"
+	pollinationsPaidURL = "https://gen.pollinations.ai/v1/chat/completions"
 )
 
 var defaultHTTPClient = &http.Client{Timeout: defaultTimeout}
@@ -145,7 +149,16 @@ func (p *pollinationsProvider) Send(ctx context.Context, history []Message, imag
 	if p.seed != nil {
 		payload["seed"] = *p.seed
 	}
-	respBody, err := postJSON(ctx, p.client, defaultPollinationsURL, payload, p.key)
+
+	// Pollinations без API-ключа использует бесплатный endpoint text.pollinations.ai/openai.
+	// Этот endpoint не требует авторизации и доступен для бесплатного использования.
+	// С API-ключом используется gen.pollinations.ai/v1/chat/completions.
+	endpoint := pollinationsPaidURL
+	if p.key == "" {
+		endpoint = pollinationsFreeURL
+	}
+
+	respBody, err := postJSON(ctx, p.client, endpoint, payload, p.key)
 	if err != nil {
 		return "", err
 	}
