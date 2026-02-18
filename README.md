@@ -1,4 +1,5 @@
 # llmclient
+
 A minimal, dependency-free Go client for multiple LLM providers with a unified API.
 
 ## Features
@@ -13,7 +14,7 @@ A minimal, dependency-free Go client for multiple LLM providers with a unified A
 ## Installation
 
 ```bash
-go get github.com/SkalaSkalolaz/llmclient
+go get github.com/llmclient
 ```
 
 ## Quick Start
@@ -25,7 +26,7 @@ import (
     "fmt"
     "log"
     
-    "github.com/SkalaSkalolaz/llmclient"
+    "github.com/llmclient"
 )
 
 func main() {
@@ -54,8 +55,17 @@ response, err := llmclient.Send("ollama", "llama3", "", "You are helpful.", "Hel
 
 ### Pollinations
 
+Pollinations supports two modes:
+- **Free tier** (no API key): Uses `https://text.pollinations.ai/openai` endpoint
+- **Paid tier** (with API key): Uses `https://gen.pollinations.ai/v1/chat/completions` endpoint
+
 ```go
+// Free tier - no API key required
 response, err := llmclient.Send("pollinations", "openai", "", "system", "prompt",
+    llmclient.WithSeed(42))
+
+// Paid tier - with API key
+response, err := llmclient.Send("pollinations", "openai", "your-api-key", "system", "prompt",
     llmclient.WithSeed(42))
 ```
 
@@ -166,7 +176,7 @@ fmt.Println(resp.Content)
 | Option | Description |
 |--------|-------------|
 | `WithTimeout(d time.Duration)` | HTTP timeout |
-| `WithHTTPClient(c *http.Client)` | Custom HTTP client |
+| `WithHTTPClient(c *http.Client)` | Custom HTTP Client |
 
 ## License
 
