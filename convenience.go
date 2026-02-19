@@ -103,3 +103,39 @@ func WithTimeout(timeout time.Duration) ClientOption {
 		c.httpClient = &http.Client{Timeout: timeout}
 	}
 }
+
+func GenerateImage(provider, model, apiKey, prompt string, opts ...ImageOption) ([]byte, error) {
+	return GenerateImageWithContext(context.Background(), provider, model, apiKey, prompt, opts...)
+}
+
+func GenerateImageWithContext(ctx context.Context, provider, model, apiKey, prompt string, opts ...ImageOption) ([]byte, error) {
+	req := &ImageRequest{
+		Provider: provider,
+		Model:    model,
+		APIKey:   apiKey,
+		Prompt:   prompt,
+	}
+	for _, opt := range opts {
+		opt(req)
+	}
+	client := NewClient()
+	resp, err := client.GenerateImage(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+type ImageOption func(*ImageRequest)
+
+func WithImageWidth(width int) ImageOption {
+	return func(r *ImageRequest) { r.Width = &width }
+}
+
+func WithImageHeight(height int) ImageOption {
+	return func(r *ImageRequest) { r.Height = &height }
+}
+
+func WithImageSeed(seed int) ImageOption {
+	return func(r *ImageRequest) { r.Seed = &seed }
+}
