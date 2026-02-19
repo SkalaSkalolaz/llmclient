@@ -1,17 +1,20 @@
 # llmclient
 
-Minimal Go client for multiple LLM providers with unified API. Zero dependencies.
+Minimal stdlib-only Go client with a unified API for OpenAI-compatible LLM endpoints.
+
+- Русская версия: [README_RU.md](./README_RU.md)
 
 ## Features
 
-- **Unified API** — single interface for all providers
-- **Streaming** — SSE streaming with callbacks
-- **Multiple Providers** — Ollama, Pollinations, OpenRouter, custom endpoints
-- **Vision** — images via URLs or base64
-- **Image Generation** — generate images via Pollinations
-- **Conversation History** — multi-turn chat support
-- **Context Support** — proper cancellation and timeouts
-- **Zero Dependencies** — standard library only
+- **Chat (non-stream)**: one API for Ollama, OpenRouter, Pollinations, and any OpenAI-compatible URL
+- **Streaming (SSE)**: token/chunk streaming via callback
+- **Conversation history**: send `[]Message`
+- **Vision**: images as URL or `data:image/...;base64,...`, plus `ContentPart` API
+- **Image generation (Pollinations)**: `gen.pollinations.ai/image/{prompt}` (+ width/height/seed)
+- **Audio generation (Pollinations)**: `gen.pollinations.ai/audio/{prompt}` (+ model)
+- **Audio transcription (Pollinations)**: multipart upload to `gen.pollinations.ai/v1/audio/transcriptions`
+- **Context**: cancellation/timeouts via `context.Context`
+- **Zero dependencies**: standard library only
 
 ## Installation
 
@@ -203,7 +206,7 @@ imageData, err := llmclient.GenerateImage("pollinations", "flux", "", "A sunset 
 if err != nil {
     log.Fatal(err)
 }
-err = os.WriteFile("output.png", imageData, 0644)
+_ = os.WriteFile("output.png", imageData, 0644)
 ```
 
 With options:
@@ -225,7 +228,7 @@ imageData, err := llmclient.GenerateImageWithContext(ctx, "pollinations", "flux"
 
 ## Client Instance
 
-Reuse HTTP connections across multiple requests:
+Reuse HTTP connections across multiple requests (chat/stream/image/audio/transcription):
 
 ```go
 client := llmclient.NewClient(
@@ -269,6 +272,39 @@ customHTTP := &http.Client{
 client := llmclient.NewClient(llmclient.WithHTTPClient(customHTTP))
 ```
 
+## Audio
+
+### Generate audio (Pollinations)
+
+```go
+wav, err := llmclient.GenerateAudio("pollinations", "", "Hello from Go!",
+    llmclient.WithAudioModel("elevenlabs"),
+)
+if err != nil {
+    log.Fatal(err)
+}
+_ = os.WriteFile("out.wav", wav, 0644)
+```
+
+### Transcribe audio (Pollinations)
+
+```go
+b, _ := os.ReadFile("speech.wav")
+
+c := llmclient.NewClient()
+resp, err := c.TranscribeAudio(context.Background(), &llmclient.TranscriptionRequest{
+    Provider: "pollinations",
+    APIKey:   "",
+    Model:    "whisper-1",
+    FileName: "speech.wav",
+    FileData: b,
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(resp.Text)
+```
+
 ## API Reference
 
 ### Simple Functions
@@ -298,15 +334,30 @@ client := llmclient.NewClient(llmclient.WithHTTPClient(customHTTP))
 | `GenerateImage(provider, model, apiKey, prompt, opts...)` | Generate image |
 | `GenerateImageWithContext(ctx, ...)` | With context |
 
+### Audio Generation
+
+| Function | Description |
+|----------|-------------|
+| `GenerateAudio(provider, apiKey, prompt, opts...)` | Generate audio |
+| `GenerateAudioWithContext(ctx, ...)` | With context |
+
+### Audio Transcription
+
+| Method | Description |
+|--------|-------------|
+| `(*Client).TranscribeAudio(ctx, req)` | Transcribe audio file (Pollinations) |
+
 ### Options
+
+Note: these options are set on `Request`, but **not all providers forward them to the upstream payload yet**.
 
 | Option | Description |
 |--------|-------------|
 | `WithImages(images)` | Attach images to request |
 | `WithEndpoint(url)` | Custom API endpoint |
-| `WithTemperature(temp)` | Sampling temperature |
-| `WithMaxTokens(max)` | Max tokens in response |
-| `WithSeed(seed)` | Deterministic sampling |
+| `WithTemperature(temp)` | Sampling temperature (пока не пробрасывается в payload) |
+| `WithMaxTokens(max)` | Max tokens in response (пока не пробрасывается в payload) |
+| `WithSeed(seed)` | Seed (используется Pollinations) |
 
 ### Image Options
 
@@ -315,6 +366,12 @@ client := llmclient.NewClient(llmclient.WithHTTPClient(customHTTP))
 | `WithImageWidth(width)` | Image width in pixels |
 | `WithImageHeight(height)` | Image height in pixels |
 | `WithImageSeed(seed)` | Seed for reproducibility |
+
+### Audio Options
+
+| Option | Description |
+|--------|-------------|
+| `WithAudioModel(model)` | Audio model name (Pollinations query param) |
 
 ### Client Options
 
