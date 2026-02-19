@@ -45,8 +45,36 @@ func WithHTTPClient(hc *http.Client) ClientOption {
 }
 
 type Message struct {
-	Role    string
-	Content string
+	Role         string
+	Content      string
+	ContentParts []ContentPart
+}
+
+type ContentPart struct {
+	Type     string    `json:"type"`
+	Text     string    `json:"text,omitempty"`
+	ImageURL *ImageURL `json:"image_url,omitempty"`
+}
+
+type ImageURL struct {
+	URL    string `json:"url"`
+	Detail string `json:"detail,omitempty"`
+}
+
+func NewTextPart(text string) ContentPart {
+	return ContentPart{Type: "text", Text: text}
+}
+
+func NewImageURLPart(url string) ContentPart {
+	return ContentPart{Type: "image_url", ImageURL: &ImageURL{URL: url}}
+}
+
+func NewImageURLPartWithDetail(url, detail string) ContentPart {
+	return ContentPart{Type: "image_url", ImageURL: &ImageURL{URL: url, Detail: detail}}
+}
+
+func NewImageBase64Part(mediaType, base64Data string) ContentPart {
+	return ContentPart{Type: "image_url", ImageURL: &ImageURL{URL: "data:" + mediaType + ";base64," + base64Data}}
 }
 
 type Request struct {
@@ -204,13 +232,40 @@ func messagesToMaps(history []Message, images []string, systemPrompt string) []m
 		msgs = append(msgs, map[string]interface{}{"role": "system", "content": systemPrompt})
 	}
 	for i, m := range history {
-		if i == len(history)-1 && m.Role == "user" && len(images) > 0 {
-			msgs = append(msgs, map[string]interface{}{"role": m.Role, "content": buildMessageContent(m.Content, images)})
+		if i == len(history)-1 && m.Role == "user" {
+			if len(m.ContentParts) > 0 {
+				msgs = append(msgs, map[string]interface{}{"role": m.Role, "content": contentPartsToSlice(m.ContentParts)})
+			} else if len(images) > 0 {
+				msgs = append(msgs, map[string]interface{}{"role": m.Role, "content": buildMessageContent(m.Content, images)})
+			} else {
+				msgs = append(msgs, map[string]interface{}{"role": m.Role, "content": m.Content})
+			}
 		} else {
-			msgs = append(msgs, map[string]interface{}{"role": m.Role, "content": m.Content})
+			if len(m.ContentParts) > 0 {
+				msgs = append(msgs, map[string]interface{}{"role": m.Role, "content": contentPartsToSlice(m.ContentParts)})
+			} else {
+				msgs = append(msgs, map[string]interface{}{"role": m.Role, "content": m.Content})
+			}
 		}
 	}
 	return msgs
+}
+
+func contentPartsToSlice(parts []ContentPart) []map[string]interface{} {
+	result := make([]map[string]interface{}, len(parts))
+	for i, p := range parts {
+		part := map[string]interface{}{"type": p.Type}
+		if p.Type == "text" {
+			part["text"] = p.Text
+		} else if p.Type == "image_url" && p.ImageURL != nil {
+			part["image_url"] = map[string]interface{}{"url": p.ImageURL.URL}
+			if p.ImageURL.Detail != "" {
+				part["image_url"].(map[string]interface{})["detail"] = p.ImageURL.Detail
+			}
+		}
+		result[i] = part
+	}
+	return result
 }
 
 func buildMessageContent(content string, images []string) interface{} {
