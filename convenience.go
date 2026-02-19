@@ -171,33 +171,6 @@ func NewUserMessageWithContentParts(parts []ContentPart) Message {
 	return Message{Role: "user", ContentParts: parts, Content: textContent}
 }
 
-func GenerateAudio(provider, apiKey, prompt string, opts ...AudioOption) ([]byte, error) {
-	return GenerateAudioWithContext(context.Background(), provider, apiKey, prompt, opts...)
-}
-
-func GenerateAudioWithContext(ctx context.Context, provider, apiKey, prompt string, opts ...AudioOption) ([]byte, error) {
-	req := &AudioRequest{
-		Provider: provider,
-		APIKey:   apiKey,
-		Prompt:   prompt,
-	}
-	for _, opt := range opts {
-		opt(req)
-	}
-	client := NewClient()
-	resp, err := client.GenerateAudio(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	return resp.Data, nil
-}
-
-type AudioOption func(*AudioRequest)
-
-func WithAudioModel(model string) AudioOption {
-	return func(r *AudioRequest) { r.Model = model }
-}
-
 func SendStream(provider, model, apiKey, systemPrompt, prompt string, callback StreamCallback, opts ...SendOption) (string, error) {
 	return SendStreamWithContext(context.Background(), provider, model, apiKey, systemPrompt, prompt, callback, opts...)
 }
