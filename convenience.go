@@ -170,3 +170,49 @@ func NewUserMessageWithContentParts(parts []ContentPart) Message {
 	}
 	return Message{Role: "user", ContentParts: parts, Content: textContent}
 }
+
+func SendStream(provider, model, apiKey, systemPrompt, prompt string, callback StreamCallback, opts ...SendOption) (string, error) {
+	return SendStreamWithContext(context.Background(), provider, model, apiKey, systemPrompt, prompt, callback, opts...)
+}
+
+func SendStreamWithContext(ctx context.Context, provider, model, apiKey, systemPrompt, prompt string, callback StreamCallback, opts ...SendOption) (string, error) {
+	req := &Request{
+		Provider:     provider,
+		Model:        model,
+		APIKey:       apiKey,
+		SystemPrompt: systemPrompt,
+		Prompt:       prompt,
+	}
+	for _, opt := range opts {
+		opt(req)
+	}
+	client := NewClient()
+	resp, err := client.SendStream(ctx, req, callback)
+	if err != nil {
+		return "", err
+	}
+	return resp.Content, nil
+}
+
+func SendMessagesStream(provider, model, apiKey, systemPrompt string, messages []Message, callback StreamCallback, opts ...SendOption) (string, error) {
+	return SendMessagesStreamWithContext(context.Background(), provider, model, apiKey, systemPrompt, messages, callback, opts...)
+}
+
+func SendMessagesStreamWithContext(ctx context.Context, provider, model, apiKey, systemPrompt string, messages []Message, callback StreamCallback, opts ...SendOption) (string, error) {
+	req := &Request{
+		Provider:     provider,
+		Model:        model,
+		APIKey:       apiKey,
+		SystemPrompt: systemPrompt,
+		Messages:     messages,
+	}
+	for _, opt := range opts {
+		opt(req)
+	}
+	client := NewClient()
+	resp, err := client.SendStream(ctx, req, callback)
+	if err != nil {
+		return "", err
+	}
+	return resp.Content, nil
+}
