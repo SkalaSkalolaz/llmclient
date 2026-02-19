@@ -139,3 +139,34 @@ func WithImageHeight(height int) ImageOption {
 func WithImageSeed(seed int) ImageOption {
 	return func(r *ImageRequest) { r.Seed = &seed }
 }
+
+func NewUserMessage(text string) Message {
+	return Message{Role: "user", Content: text}
+}
+
+func NewAssistantMessage(text string) Message {
+	return Message{Role: "assistant", Content: text}
+}
+
+func NewSystemMessage(text string) Message {
+	return Message{Role: "system", Content: text}
+}
+
+func NewUserMessageWithImages(text string, imageUrls []string) Message {
+	parts := []ContentPart{NewTextPart(text)}
+	for _, url := range imageUrls {
+		parts = append(parts, NewImageURLPart(url))
+	}
+	return Message{Role: "user", Content: text, ContentParts: parts}
+}
+
+func NewUserMessageWithContentParts(parts []ContentPart) Message {
+	var textContent string
+	for _, p := range parts {
+		if p.Type == "text" {
+			textContent = p.Text
+			break
+		}
+	}
+	return Message{Role: "user", ContentParts: parts, Content: textContent}
+}
