@@ -13,6 +13,8 @@ Minimal stdlib-only Go client with a unified API for OpenAI-compatible LLM endpo
 - **Image generation (Pollinations)**: `gen.pollinations.ai/image/{prompt}` (+ width/height/seed)
 - **Audio generation (Pollinations)**: `gen.pollinations.ai/audio/{prompt}` (+ model)
 - **Audio transcription (Pollinations)**: multipart upload to `gen.pollinations.ai/v1/audio/transcriptions`
+- **Models**: list text/audio models (Pollinations)
+- **Account** (Pollinations): profile, balance, usage (JSON/CSV)
 - **Context**: cancellation/timeouts via `context.Context`
 - **Zero dependencies**: standard library only
 
@@ -305,6 +307,53 @@ if err != nil {
 fmt.Println(resp.Text)
 ```
 
+## Models
+
+List available models (Pollinations):
+
+```go
+models, err := llmclient.ListTextModels("pollinations", "")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println("models:", len(models))
+
+audioModels, err := llmclient.ListAudioModels("pollinations", "")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println("audio models:", len(audioModels))
+```
+
+Helpers:
+
+```go
+free := llmclient.FilterFreeModels(models)
+tts := llmclient.FilterTextToSpeechModels(audioModels)
+```
+
+## Account (Pollinations)
+
+```go
+bal, err := llmclient.GetBalance("pollinations", "your-api-key")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(bal.Credits, bal.Currency)
+
+profile, err := llmclient.GetProfile("pollinations", "your-api-key")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(profile.Email, profile.Plan)
+
+usage, err := llmclient.GetUsage("pollinations", "your-api-key", llmclient.UsageFormatJSON)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(usage.Totals.TotalTokens, usage.Totals.TotalCost)
+```
+
 ## API Reference
 
 ### Simple Functions
@@ -346,6 +395,21 @@ fmt.Println(resp.Text)
 | Method | Description |
 |--------|-------------|
 | `(*Client).TranscribeAudio(ctx, req)` | Transcribe audio file (Pollinations) |
+
+### Models
+
+| Function | Description |
+|----------|-------------|
+| `ListTextModels(provider, apiKey)` | List text/chat models |
+| `ListAudioModels(provider, apiKey)` | List audio models |
+
+### Account (Pollinations)
+
+| Function | Description |
+|----------|-------------|
+| `GetProfile(provider, apiKey)` | Get account profile |
+| `GetBalance(provider, apiKey)` | Get account balance/credits |
+| `GetUsage(provider, apiKey, format)` | Get usage (JSON/CSV) |
 
 ### Options
 

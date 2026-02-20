@@ -11,6 +11,8 @@
 - **Генерация изображений (Pollinations)**: `gen.pollinations.ai/image/{prompt}` (+ width/height/seed)
 - **Генерация аудио (Pollinations)**: `gen.pollinations.ai/audio/{prompt}` (+ model)
 - **Транскрибация аудио (Pollinations)**: multipart upload в `gen.pollinations.ai/v1/audio/transcriptions`
+- **Модели**: получение списка текстовых/аудио моделей (Pollinations)
+- **Аккаунт (Pollinations)**: профиль, баланс, usage (JSON/CSV)
 - **Context**: корректная отмена/таймауты через `context.Context`
 - **0 зависимостей**: только стандартная библиотека
 
@@ -158,6 +160,53 @@ if err != nil {
     log.Fatal(err)
 }
 fmt.Println(resp.Text)
+```
+
+## Модели (Pollinations)
+
+Получить список доступных моделей:
+
+```go
+models, err := llmclient.ListTextModels("pollinations", "")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println("models:", len(models))
+
+audioModels, err := llmclient.ListAudioModels("pollinations", "")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println("audio models:", len(audioModels))
+```
+
+Полезные фильтры:
+
+```go
+free := llmclient.FilterFreeModels(models)
+tts := llmclient.FilterTextToSpeechModels(audioModels)
+```
+
+## Аккаунт (Pollinations)
+
+```go
+bal, err := llmclient.GetBalance("pollinations", "your-api-key")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(bal.Credits, bal.Currency)
+
+profile, err := llmclient.GetProfile("pollinations", "your-api-key")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(profile.Email, profile.Plan)
+
+usage, err := llmclient.GetUsage("pollinations", "your-api-key", llmclient.UsageFormatJSON)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(usage.Totals.TotalTokens, usage.Totals.TotalCost)
 ```
 
 ## Справка по API
