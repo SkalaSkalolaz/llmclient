@@ -66,6 +66,7 @@ response, err := llmclient.Send("ollama", "llama3", "", "system", "prompt",
 ```
 
 ### Pollinations
+https://pollinations.ai/
 
 Two modes:
 - **Free** (no API key) → `text.pollinations.ai/openai`
