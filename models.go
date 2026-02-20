@@ -11,12 +11,14 @@ import (
 )
 
 type ModelPricing struct {
-	Currency              string  `json:"currency"`
-	PromptTextTokens      float64 `json:"promptTextTokens,omitempty"`
-	PromptCachedTokens    float64 `json:"promptCachedTokens,omitempty"`
-	PromptAudioTokens     float64 `json:"promptAudioTokens,omitempty"`
-	CompletionTextTokens  float64 `json:"completionTextTokens,omitempty"`
-	CompletionAudioTokens float64 `json:"completionAudioTokens,omitempty"`
+	Currency               string  `json:"currency"`
+	PromptTextTokens       float64 `json:"promptTextTokens,omitempty"`
+	PromptCachedTokens     float64 `json:"promptCachedTokens,omitempty"`
+	PromptAudioTokens      float64 `json:"promptAudioTokens,omitempty"`
+	PromptAudioSeconds     float64 `json:"promptAudioSeconds,omitempty"`
+	CompletionTextTokens   float64 `json:"completionTextTokens,omitempty"`
+	CompletionAudioTokens  float64 `json:"completionAudioTokens,omitempty"`
+	CompletionAudioSeconds float64 `json:"completionAudioSeconds,omitempty"`
 }
 
 type Model struct {
@@ -32,6 +34,7 @@ type Model struct {
 	PaidOnly         bool           `json:"paid_only,omitempty"`
 	ContextWindow    int            `json:"context_window,omitempty"`
 	Voices           []string       `json:"voices,omitempty"`
+	Metadata         map[string]any `json:"metadata,omitempty"`
 	Raw              map[string]any `json:"-"`
 }
 
@@ -43,6 +46,16 @@ type ModelsResponse struct {
 type ModelsRequest struct {
 	Provider string
 	APIKey   string
+}
+
+type AudioModelsRequest struct {
+	Provider string
+	APIKey   string
+}
+
+type AudioModelsResponse struct {
+	Models []Model `json:"models"`
+	Raw    []byte  `json:"-"`
 }
 
 func (c *Client) ListTextModels(ctx context.Context, req *ModelsRequest) (*ModelsResponse, error) {
@@ -63,6 +76,24 @@ func (c *Client) ListTextModels(ctx context.Context, req *ModelsRequest) (*Model
 	return &ModelsResponse{Models: models, Raw: raw}, nil
 }
 
+func (c *Client) ListAudioModels(ctx context.Context, req *AudioModelsRequest) (*AudioModelsResponse, error) {
+	if req == nil {
+		return nil, errors.New("audio models request is nil")
+	}
+
+	provider, err := c.newAudioModelsProvider(req)
+	if err != nil {
+		return nil, err
+	}
+
+	models, raw, err := provider.ListAudioModels(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AudioModelsResponse{Models: models, Raw: raw}, nil
+}
+
 func (c *Client) newModelsProvider(req *ModelsRequest) (modelsProvider, error) {
 	name := strings.ToLower(strings.TrimSpace(req.Provider))
 
@@ -77,16 +108,42 @@ func (c *Client) newModelsProvider(req *ModelsRequest) (modelsProvider, error) {
 	}
 }
 
+func (c *Client) newAudioModelsProvider(req *AudioModelsRequest) (audioModelsProvider, error) {
+	name := strings.ToLower(strings.TrimSpace(req.Provider))
+
+	switch name {
+	case "pollinations":
+		return &pollinationsAudioModelsProvider{client: c.httpClient}, nil
+	default:
+		if custom, ok := registeredAudioModelsProviders[name]; ok {
+			return custom(c.httpClient), nil
+		}
+		return nil, fmt.Errorf("unknown audio models provider: %s", req.Provider)
+	}
+}
+
 type modelsProvider interface {
 	ListModels(ctx context.Context, req *ModelsRequest) ([]Model, []byte, error)
 }
 
+type audioModelsProvider interface {
+	ListAudioModels(ctx context.Context, req *AudioModelsRequest) ([]Model, []byte, error)
+}
+
 type modelsProviderFactory func(*http.Client) modelsProvider
+
+type audioModelsProviderFactory func(*http.Client) audioModelsProvider
 
 var registeredModelsProviders = make(map[string]modelsProviderFactory)
 
+var registeredAudioModelsProviders = make(map[string]audioModelsProviderFactory)
+
 func RegisterModelsProvider(name string, factory modelsProviderFactory) {
 	registeredModelsProviders[strings.ToLower(name)] = factory
+}
+
+func RegisterAudioModelsProvider(name string, factory audioModelsProviderFactory) {
+	registeredAudioModelsProviders[strings.ToLower(name)] = factory
 }
 
 type pollinationsModelsProvider struct {
@@ -129,6 +186,64 @@ func (p *pollinationsModelsProvider) ListModels(ctx context.Context, req *Models
 	}
 
 	return models, data, nil
+}
+
+type pollinationsAudioModelsProvider struct {
+	client *http.Client
+}
+
+func (p *pollinationsAudioModelsProvider) ListAudioModels(ctx context.Context, req *AudioModelsRequest) ([]Model, []byte, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", "https://gen.pollinations.ai/audio/models", nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("create request: %w", err)
+	}
+
+	if req.APIKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+req.APIKey)
+	}
+
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, nil, fmt.Errorf("request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode >= 300 {
+		return nil, nil, fmt.Errorf("api error %d: %s", resp.StatusCode, string(data))
+	}
+
+	var models []Model
+	if err := json.Unmarshal(data, &models); err != nil {
+		return nil, nil, fmt.Errorf("parse response: %w", err)
+	}
+
+	for i := range models {
+		models[i].Raw = make(map[string]any)
+		_ = json.Unmarshal(data, &models[i].Raw)
+	}
+
+	return models, data, nil
+}
+
+func ListAudioModels(provider, apiKey string) ([]Model, error) {
+	return ListAudioModelsWithContext(context.Background(), provider, apiKey)
+}
+
+func ListAudioModelsWithContext(ctx context.Context, provider, apiKey string) ([]Model, error) {
+	client := NewClient()
+	resp, err := client.ListAudioModels(ctx, &AudioModelsRequest{
+		Provider: provider,
+		APIKey:   apiKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Models, nil
 }
 
 func ListTextModels(provider, apiKey string) ([]Model, error) {
@@ -217,4 +332,64 @@ func FilterFreeModels(models []Model) []Model {
 		}
 	}
 	return result
+}
+
+func (m *Model) HasVoice(voice string) bool {
+	for _, v := range m.Voices {
+		if v == voice {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Model) IsTextToSpeech() bool {
+	return m.HasInputModality("text") && m.HasOutputModality("audio")
+}
+
+func (m *Model) IsSpeechToText() bool {
+	return m.HasInputModality("audio") && m.HasOutputModality("text")
+}
+
+func FilterTextToSpeechModels(models []Model) []Model {
+	var result []Model
+	for _, m := range models {
+		if m.IsTextToSpeech() {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
+func FilterSpeechToTextModels(models []Model) []Model {
+	var result []Model
+	for _, m := range models {
+		if m.IsSpeechToText() {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
+func FilterModelsByVoice(models []Model, voice string) []Model {
+	var result []Model
+	for _, m := range models {
+		if m.HasVoice(voice) {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
+func (m *Model) EffectivePricePerAudioSecond() float64 {
+	if m.Pricing == nil {
+		return 0
+	}
+	if m.IsTextToSpeech() {
+		return m.Pricing.CompletionAudioSeconds
+	}
+	if m.IsSpeechToText() {
+		return m.Pricing.PromptAudioSeconds
+	}
+	return 0
 }
